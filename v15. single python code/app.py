@@ -52,20 +52,6 @@ def send_otp_email(recipient_email):
         print(f"Error sending email: {e}")
         return None
 
-# API Route for OTP
-@app.route('/api/send-otp', methods=['POST'])
-def api_send_otp():
-    data = request.get_json()
-    email = data.get("email")
-    if not email:
-        return jsonify({"error": "Email is required"}), 400
-
-    otp = send_otp_email(email)
-    if otp:
-        return jsonify({"message": "OTP sent successfully", "otp": otp}), 200
-    else:
-        return jsonify({"error": "Failed to send OTP"}), 500
-
 def no_to_bin_str(num: int, bits: int):
     # Convert the number to a binary string and remove the '0b' prefix
     binary = bin(num)[2:]
