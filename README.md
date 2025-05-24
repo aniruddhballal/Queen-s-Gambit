@@ -8,4 +8,4 @@ note: this readme.md file is SO OUT OF DATE, i have made significant progress si
 <br>.<br>
 update: please check the project synopsis - it is somewhat doing what the readme file should do, but not really AND i do have to make a proper readme file for this project, BUT AGAIN im hoping that the comments in the latest version or the last two versions of the app are helpful enough for the reader/developer to understand it.
 <br>.<br>
-update2: v stands for version, and all versions flaunt new features - respective to their titles.
+update2: the v in all the code filenames stands for version, and all versions flaunt new features - respective to their titles.
