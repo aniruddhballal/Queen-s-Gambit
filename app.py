@@ -4,6 +4,8 @@ from flask import jsonify
 import json
 from encode import encode
 from decode import decode
+from pgndouble import aes_encrypt, aes_decrypt, des_encrypt, des_decrypt
+from Crypto.Random import get_random_bytes
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -60,19 +62,35 @@ def upload_file():
             uploaded_file_path = os.path.join('uploads', uploaded_file.filename)
             uploaded_file.save(uploaded_file_path)
 
-            # Call the encode function to get PGN
+            # Call the encode function to get PGN (assumed to be a string)
             encoded_pgn = encode(uploaded_file_path)
 
-            # Save the PGN file with the same name as the uploaded file
+            # Define keys for AES and DES (must be 16 bytes for AES, 8 bytes for DES)
+            aes_key = get_random_bytes(16)
+            des_key = get_random_bytes(8)
+
+            # Save keys to a file (as hex values)
+            aes_key_hex = aes_key.hex()
+            des_key_hex = des_key.hex()
+            with open("keys.txt", "w") as file:
+                file.write(f"AES Key: {aes_key_hex}\n")
+                file.write(f"DES Key: {des_key_hex}\n")
+
+            # Encrypt the encoded PGN (convert string to bytes before encrypting)
+            aes_encrypted_pgn = aes_encrypt(encoded_pgn.encode('utf-8'), aes_key)
+            des_encrypted_pgn = des_encrypt(aes_encrypted_pgn, des_key)
+
+            # Save the doubly encrypted data as bytes to the .pgn file
             pgn_file_name = f'{base_filename}.pgn'
             pgn_file_path = os.path.join('uploads', pgn_file_name)
-            with open(pgn_file_path, "w") as f:
-                f.write(encoded_pgn)
+            with open(pgn_file_path, "wb") as f:  # Write as binary
+                f.write(des_encrypted_pgn)
 
             # Return a JSON response with the correct PGN filename
             return jsonify({"message": "File converted successfully!", "pgn_file": pgn_file_name})
 
     return render_template('upload.html')
+
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
@@ -83,12 +101,35 @@ def decrypt_file():
     pgn_file = request.files['pgn_file']
     output_file_name = request.form['output_file']
 
-    # Process the PGN file and save the output
+    # Read the doubly encrypted file in binary mode
+    double_encrypted_pgn = pgn_file.read()  # Read as bytes
+
+    # Read the saved keys from the keys.txt file
+    with open("keys.txt", "r") as file:
+        lines = file.readlines()
+
+    # Step 2: Extracting and converting the keys back to bytes
+    aes_key_hex = lines[0].strip().split(": ")[1]  # Extracting the AES key
+    des_key_hex = lines[1].strip().split(": ")[1]  # Extracting the DES key
+    os.remove("keys.txt")
+
+    # Step 3: Converting from hex back to bytes
+    aes_key = bytes.fromhex(aes_key_hex)
+    des_key = bytes.fromhex(des_key_hex)
+
+    # Decrypt the file (first DES, then AES)
+    des_decrypted_pgn = des_decrypt(double_encrypted_pgn, des_key)
+    aes_decrypted_pgn = aes_decrypt(des_decrypted_pgn, aes_key)
+
+    # Step 4: Convert the decrypted bytes back to a string
+    decrypted_pgn_string = aes_decrypted_pgn.decode('utf-8')
+
+    # Now call your decode function with the decrypted data
     output_file_path = f'uploads/{output_file_name}'  # Ensure this path is correct
-    pgn_string = pgn_file.read().decode('utf-8')  # Read the PGN file
-    decode(pgn_string, output_file_path)  # Call your decode function
+    decode(decrypted_pgn_string, output_file_path)  # Call your decode function
 
     return jsonify({"message": "File decrypted successfully!", "output_file": output_file_name})
+
 
 @app.route('/delete_account', methods=['GET', 'POST'])
 def delete_account():
