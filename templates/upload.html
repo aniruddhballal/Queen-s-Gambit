@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queen's Gambit - Upload</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        /* Add some styles for the loading indicator and progress bar */
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+        #progress-bar {
+            width: 0%;
+            background: green;
+            height: 20px;
+            border: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Queen's Gambit</h1>
+        <div class="tagline">Where your data plays by its own rules</div>
+    </header>
+
+    <div class="top-right-links">
+        <a href="{{ url_for('logout') }}">Logout</a>
+        <a href="{{ url_for('delete_account') }}" class="delete-link">Delete Account</a>
+    </div>
+
+    <div class="overlay">
+        <form id="upload-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+            <label for="file" class="upload-button">Choose a file</label>
+            <input type="file" id="file" name="file" required style="display: none;">
+            <input type="submit" value="Encrypt">
+        </form>
+        <div id="loading">
+            <p>Loading... Please wait.</p>
+            <div id="progress-bar"></div>
+        </div>
+        <div id="result" class="result-container"></div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $('#upload-form').on('submit', function(e) {
+                e.preventDefault();  // Prevent default form submission
+
+                $('#loading').show();  // Show loading indicator
+
+                var formData = new FormData(this);
+
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: $(this).attr('method'),
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.onprogress = function(event) {
+                            if (event.lengthComputable) {
+                                var percentComplete = (event.loaded / event.total) * 100;
+                                $('#progress-bar').css('width', percentComplete + '%');
+                            }
+                        };
+                        return xhr;
+                    },
+                    success: function(response) {
+                        var pgnFileName = response.pgn_file;
+                        var message = response.message + ' <a href="/uploads/' + pgnFileName + '" download>Download PGN</a>';
+                        $('#result').html(message);  // Corrected ID here
+                        $('#loading').hide();  // Hide loading indicator on success
+                    },
+                    error: function() {
+                        $('#result').html('An error occurred. Please try again.');
+                        $('#loading').hide();  // Hide loading indicator on error
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
