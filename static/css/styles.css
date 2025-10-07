@@ -48,6 +48,19 @@ h1 {
     margin-top: 0;
 }
 
+.overlay2 {
+    background: rgba(0, 0, 0, 0);
+    padding: 2rem; /* Keep existing padding or adjust as needed */
+    border-radius: 8px;
+    text-align: center;
+    width: 440px;
+    height: 300px; /* Set a fixed height */
+    margin: 20px auto; /* Center the box horizontally */
+    flex-grow: 1; /* Push the box down from the header */
+    overflow: auto; /* Add this to handle overflow if needed */
+    margin-top: 0;
+}
+
 /* Form */
 form {
     display: flex;
@@ -115,6 +128,23 @@ input[type="file"] {
 }
 
 .upload-button:hover {
+    background-color: #00d0ff70;
+    border-color: #009acd;
+    color: #000;
+}
+
+.decrypt-button {
+    padding: 0.5rem 1rem;
+    border: 1px solid #00bfff;
+    border-radius: 4px;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-block; /* To keep it inline */
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.decrypt-button:hover {
     background-color: #00d0ff70;
     border-color: #009acd;
     color: #000;

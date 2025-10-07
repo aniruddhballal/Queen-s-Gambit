@@ -7,16 +7,40 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        /* Add some styles for the loading indicator and progress bar */
-        #loading {
+        /* Add styles for the layout */
+        .container {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        .overlay {
+            flex: 1;
+            margin-right: 20px;  /* Space between the boxes */
+        }
+        .overlay2 {
+            flex: 1;
+            margin-left: 20px;   /* Space between the boxes */
+        }
+        /* Loading and progress bar styles */
+        #loading, #loading-decrypt {
             display: none;
             margin-top: 20px;
         }
-        #progress-bar {
+        #progress-bar, #progress-bar-decrypt {
             width: 0%;
             background: green;
             height: 20px;
             border: 1px solid #000;
+        }
+        /* Other styles */
+        .output-label {
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle; /* Aligns label with input field */
+        }
+        #output_file {
+            width: 150px; /* Adjust the width as needed */
+            display: inline-block; /* Ensures it stays in line */
         }
     </style>
 </head>
@@ -31,28 +55,46 @@
         <a href="{{ url_for('delete_account') }}" class="delete-link">Delete Account</a>
     </div>
 
-    <div class="overlay">
-        <form id="upload-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
-            <label for="file" class="upload-button">Choose a file</label>
-            <input type="file" id="file" name="file" required style="display: none;">
-            <input type="submit" value="Encrypt">
-        </form>
-        <div id="loading">
-            <p>Loading... Please wait.</p>
-            <div id="progress-bar"></div>
+    <div class="container">
+        <div class="overlay">
+            <form id="upload-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                <label for="file" class="upload-button">Choose a file</label>
+                <input type="file" id="file" name="file" required style="display: none;">
+                <input type="submit" value="Encrypt">
+            </form>
+            <div id="loading">
+                <p>Loading... Please wait.</p>
+                <div id="progress-bar"></div>
+            </div>
+            <div id="result" class="result-container"></div>
         </div>
-        <div id="result" class="result-container"></div>
+        
+        <div class="overlay2">
+            <form id="decrypt-form" action="{{ url_for('decrypt_file') }}" method="post" enctype="multipart/form-data">
+                <label for="pgn_file" class="upload-button">Choose a .pgn file</label>
+                <input type="file" id="pgn_file" name="pgn_file" required style="display: none;">
+                
+                <div>
+                    <label for="output_file" class="output-label">Output file name:</label>
+                    <input type="text" id="output_file" name="output_file" placeholder="output.txt" required style="width: 150px; display: inline-block; margin-left: 10px;">
+                </div>                        
+                
+                <input type="submit" value="Decrypt">
+            </form>
+            <div id="loading-decrypt">
+                <p>Loading... Please wait.</p>
+                <div id="progress-bar-decrypt"></div>
+            </div>
+            <div id="result-decrypt" class="result-container"></div>
+        </div>
     </div>
 
     <script>
         $(document).ready(function() {
             $('#upload-form').on('submit', function(e) {
-                e.preventDefault();  // Prevent default form submission
-
-                $('#loading').show();  // Show loading indicator
-
+                e.preventDefault();
+                $('#loading').show();
                 var formData = new FormData(this);
-
                 $.ajax({
                     url: $(this).attr('action'),
                     type: $(this).attr('method'),
@@ -72,12 +114,45 @@
                     success: function(response) {
                         var pgnFileName = response.pgn_file;
                         var message = response.message + ' <a href="/uploads/' + pgnFileName + '" download>Download PGN</a>';
-                        $('#result').html(message);  // Corrected ID here
-                        $('#loading').hide();  // Hide loading indicator on success
+                        $('#result').html(message);
+                        $('#loading').hide();
                     },
                     error: function() {
                         $('#result').html('An error occurred. Please try again.');
-                        $('#loading').hide();  // Hide loading indicator on error
+                        $('#loading').hide();
+                    }
+                });
+            });
+
+            $('#decrypt-form').on('submit', function(e) {
+                e.preventDefault();
+                $('#loading-decrypt').show();
+                var formData = new FormData(this);
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: $(this).attr('method'),
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.onprogress = function(event) {
+                            if (event.lengthComputable) {
+                                var percentComplete = (event.loaded / event.total) * 100;
+                                $('#progress-bar-decrypt').css('width', percentComplete + '%');
+                            }
+                        };
+                        return xhr;
+                    },
+                    success: function(response) {
+                        var outputFileName = response.output_file;
+                        var message = response.message + ' <a href="/uploads/' + outputFileName + '" download>Download Decrypted File</a>';
+                        $('#result-decrypt').html(message);
+                        $('#loading-decrypt').hide();
+                    },
+                    error: function() {
+                        $('#result-decrypt').html('An error occurred. Please try again.');
+                        $('#loading-decrypt').hide();
                     }
                 });
             });
