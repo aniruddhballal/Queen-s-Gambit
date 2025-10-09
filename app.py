@@ -1,11 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session
-import os
+import os, base64, json, time
 from flask import jsonify
-import json
-from encode import encode
-from decode import decode
-from pgndouble import aes_encrypt, aes_decrypt, des_encrypt, des_decrypt
+from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
+from checkmate import make_gambit
+from unmate import undo_gambit
+from pgn_aes192_rsa4096 import aes_encrypt, aes_decrypt, rsa_encrypt, rsa_decrypt  # Import from the new module
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Generates a random 24-byte key
@@ -52,60 +52,7 @@ def signup():
             return redirect(url_for('login'))
     return render_template('signup.html')
 
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    return send_from_directory('uploads', filename)
-
-@app.route('/upload', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        uploaded_file = request.files['file']
-        if uploaded_file.filename != '':
-            # Get the original filename without extension and add .pgn
-            base_filename = os.path.splitext(uploaded_file.filename)[0]
-            uploaded_file_path = os.path.join('uploads', uploaded_file.filename)
-            uploaded_file.save(uploaded_file_path)
-
-            # Call the encode function to get PGN (assumed to be a string)
-            encoded_pgn = encode(uploaded_file_path)
-
-            # Define keys for AES and DES (must be 16 bytes for AES, 8 bytes for DES)
-            aes_key = get_random_bytes(16)
-            des_key = get_random_bytes(8)
-            keys_filename = get_random_bytes(24)
-            keys_xor_result = bytes(b ^ 0xff for b in keys_filename)
-
-            # Save keys to a file (as hex values)
-            aes_key_hex = aes_key.hex()
-            des_key_hex = des_key.hex()
-            keys_filename_hex = keys_filename.hex()
-            keys_xor_hex_str = keys_xor_result.hex()
-            # Directory name where the keys will be saved
-            keys_directory = "keys"
-
-            # Create the directory if it doesn't exist
-            os.makedirs(keys_directory, exist_ok=True)
-
-            keys_filename_string = os.path.join(keys_directory, f"{keys_filename_hex}.txt")
-            with open(keys_filename_string, "w") as file:
-                file.write(f"{aes_key_hex}\n")
-                file.write(f"{des_key_hex}\n")
-
-            # Encrypt the encoded PGN (convert string to bytes before encrypting)
-            aes_encrypted_pgn = aes_encrypt(encoded_pgn.encode('utf-8'), aes_key)
-            des_encrypted_pgn = des_encrypt(aes_encrypted_pgn, des_key)
-
-            # Save the doubly encrypted data as bytes to the .pgn file
-            pgn_file_name = f"{keys_xor_hex_str}.pgn"
-            pgn_file_path = os.path.join('uploads', pgn_file_name)
-            with open(pgn_file_path, "wb") as f:  # Write as binary
-                f.write(des_encrypted_pgn)
-
-            # Return a JSON response with the correct PGN filename
-            return jsonify({"message": "File converted successfully!", "pgn_file": pgn_file_name})
-
-    return render_template('upload.html')
-
+# Helper function to XOR two hex strings and return the result
 def xor_hex_strings(hex1, hex2):
     """Helper function to XOR two hex strings and return the result."""
     max_length = max(len(hex1), len(hex2))
@@ -113,71 +60,177 @@ def xor_hex_strings(hex1, hex2):
     hex2 = hex2.zfill(max_length)  # Zero-pad to ensure equal length
     return ''.join(format(int(a, 16) ^ int(b, 16), 'x') for a, b in zip(hex1, hex2))
 
+@app.route('/upload', methods=['GET', 'POST'])
+def upload_file():
+    if request.method == 'POST':
+        uploaded_file = request.files['file']
+        if uploaded_file.filename != '':
+            # Ensure the 'uploads' folder exists
+            os.makedirs('uploads', exist_ok=True)
+            base_filename = os.path.splitext(uploaded_file.filename)[0]
+            uploaded_file_path = os.path.join('uploads', uploaded_file.filename)
+            uploaded_file.save(uploaded_file_path)
+
+            # Call the encode function to get PGN (assumed to be a string)
+            encoded_pgn = make_gambit(uploaded_file_path)
+
+            print("Generating AES key...")
+            # Generate AES key
+            aes_key = get_random_bytes(32)  # AES-256 key is 32 bytes
+            print("AES key generated.")
+
+            # Generate RSA keys
+            print("Generating RSA key...")
+            tgen1 = time.time()
+            rsa_key = RSA.generate(4096)
+            public_key = rsa_key.publickey()
+            tgen2 = time.time()
+            print(f"RSA key generated in {tgen2-tgen1:.2f} seconds.")
+
+            # Save the RSA-encrypted AES key in a file
+            keys_filename = get_random_bytes(24)
+            keys_filename_hex = keys_filename.hex()  # Random key for filename
+            keys_xor_result = bytes(b ^ 0xff for b in keys_filename)
+            keys_xor_hex_str = keys_xor_result.hex()
+
+            # Ensure the 'rsa_keys' folder exists
+            rsa_keys_directory = 'rsa_keys'
+            os.makedirs(rsa_keys_directory, exist_ok=True)
+
+            # Generate public and private key filenames based on XOR logic
+            def xor_with_hex_string(original_hex, target_hex):
+                return ''.join(format(int(a, 16) ^ int(b, 16), 'x') for a, b in zip(original_hex, target_hex))
+
+            # Target hex values for XOR: all 7's and all 8's (24 characters, hex)
+            all_sevens = '1' * len(keys_filename_hex)  # Target for public key XOR result
+            all_eights = 'a' * len(keys_filename_hex)  # Target for private key XOR result
+
+            # XOR to get the public and private key filenames
+            public_key_filename_hex = xor_with_hex_string(keys_filename_hex, all_sevens)
+            private_key_filename_hex = xor_with_hex_string(keys_filename_hex, all_eights)
+
+            # Save the RSA keys in the 'rsa_keys' folder with the new filenames
+            rsa_keys_directory = 'rsa_keys'
+            os.makedirs(rsa_keys_directory, exist_ok=True)
+
+            # Save the RSA private key in the rsa_keys folder
+            private_key_path = os.path.join(rsa_keys_directory, f'{private_key_filename_hex}.pem')
+            with open(private_key_path, 'wb') as f:
+                f.write(rsa_key.export_key())  # Save private key
+
+            # Save the RSA public key in the rsa_keys folder
+            public_key_path = os.path.join(rsa_keys_directory, f'{public_key_filename_hex}.pem')
+            with open(public_key_path, 'wb') as f:
+                f.write(public_key.export_key())  # Save public key
+
+            # Encrypt AES key with RSA public key
+            rsa_encrypted_aes_key = rsa_encrypt(aes_key, public_key)
+
+            # Ensure the 'keys' folder exists
+            keys_directory = "keys"
+            os.makedirs(keys_directory, exist_ok=True)
+            keys_filename_string = os.path.join(keys_directory, f"{keys_filename_hex}.txt")
+            
+            with open(keys_filename_string, "w") as file:
+                file.write(base64.b64encode(rsa_encrypted_aes_key).decode('utf-8'))
+
+            # Encrypt the PGN data with AES
+            aes_encrypted_pgn = aes_encrypt(encoded_pgn.encode('utf-8'), aes_key)
+
+            # Save the encrypted data as a .pgn file
+            pgn_file_name = f"{keys_xor_hex_str}.pgn"
+            pgn_file_path = os.path.join('uploads', pgn_file_name)
+            with open(pgn_file_path, "wb") as f:
+                f.write(aes_encrypted_pgn)
+
+            return jsonify({"message": "File converted successfully!", "pgn_file": pgn_file_name})
+
+    return render_template('upload.html')
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory('uploads', filename)
 
 @app.route('/decrypt_file', methods=['POST'])
 def decrypt_file():
-    # Step 1: Retrieve the uploaded PGN file and its filename
+    # Step 1: Retrieve the uploaded PGN file and the output file name
     pgn_file = request.files['pgn_file']
-    pgn_filename = os.path.splitext(pgn_file.filename)[0]  # Get filename without extension
+    pgn_filename = os.path.splitext(pgn_file.filename)[0]
     output_file_name = request.form['output_file']
     
-    # Step 2: Check the keys folder for a matching key file using XOR
+    # Step 2: Check the keys folder for a matching key file using XOR logic
     keys_folder = 'keys'
     matching_key_file = None
 
-    # Iterate through all files in the keys folder
     for key_file in os.listdir(keys_folder):
-        key_file_path = os.path.join(keys_folder, key_file)
-        key_filename = os.path.splitext(key_file)[0]  # Get key filename without extension
-        #print(key_filename)
-        #print(pgn_filename)
-
-        # XOR the uploaded PGN filename and the key filename
+        key_filename = os.path.splitext(key_file)[0]
         xor_result = xor_hex_strings(pgn_filename, key_filename)
-        #print(xor_result)
-
-        # If the XOR result is 24 f's, it's the correct key file
-        if xor_result == 'ffffffffffffffffffffffffffffffffffffffffffffffff':  # 24 f's as each XOR should result in 'ff'
-            matching_key_file = key_file_path
-            #print("here2")
+        print(f"Checking key file: {key_filename}, XOR result: {xor_result}")  # Debugging output
+        if xor_result == 'ffffffffffffffffffffffffffffffffffffffffffffffff':  # 24 f's
+            matching_key_file = os.path.join(keys_folder, key_file)
             break
 
     if not matching_key_file:
-        return jsonify({
-            "error": f"No matching key found for the uploaded file {pgn_filename}",
-            "pgn_filename": pgn_filename,
-            "keys_folder": os.listdir(keys_folder)  # List all key files
-        }), 400
+        return jsonify({"error": f"No matching key found for {pgn_filename}"}), 400
 
-
-    # Step 3: Read the matched key file
+    # Step 3: Load the RSA-encrypted AES key from the matching key file
     with open(matching_key_file, "r") as file:
-        lines = file.readlines()
+        rsa_encrypted_aes_key_base64 = file.read().strip()  # Ensure it’s base64 encoded
+        rsa_encrypted_aes_key = base64.b64decode(rsa_encrypted_aes_key_base64)
 
-    aes_key_hex = lines[0].strip()  # Extract the AES key from the first line
-    des_key_hex = lines[1].strip()  # Extract the DES key from the second line
-
-    # Delete the key file after reading
     os.remove(matching_key_file)
 
-    # Step 4: Convert the hex keys back to bytes
-    aes_key = bytes.fromhex(aes_key_hex)
-    des_key = bytes.fromhex(des_key_hex)
+    # Step 4: Find the corresponding private key and public key
+    rsa_keys_directory = 'rsa_keys'
+    private_key = None
+    public_key = None
+    all_sevens = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'  # Expected XOR result for public key (24-byte hex string, hence 48 chars)
+    all_eights = '555555555555555555555555555555555555555555555555'  # Expected XOR result for private key
 
-    # Step 5: Decrypt the PGN file (first DES, then AES)
-    double_encrypted_pgn = pgn_file.read()  # Read the uploaded file's content as bytes
-    des_decrypted_pgn = des_decrypt(double_encrypted_pgn, des_key)  # DES decryption
-    aes_decrypted_pgn = aes_decrypt(des_decrypted_pgn, aes_key)  # AES decryption
+    for rsa_key_file in os.listdir(rsa_keys_directory):
+        rsa_key_filename = os.path.splitext(rsa_key_file)[0]
+        xor_with_pgn = xor_hex_strings(pgn_filename, rsa_key_filename)
+        print(xor_with_pgn)
 
-    # Step 6: Convert the decrypted bytes back to a string (assuming it's a UTF-8 encoded string)
-    decrypted_pgn_string = aes_decrypted_pgn.decode('utf-8')
+        if xor_with_pgn == all_sevens:
+            public_key_path = os.path.join(rsa_keys_directory, rsa_key_file)
+            with open(public_key_path, 'rb') as pub_key_file:
+                public_key = RSA.import_key(pub_key_file.read())
+            print(f"Found public key: {public_key_path}")
+        elif xor_with_pgn == all_eights:
+            private_key_path = os.path.join(rsa_keys_directory, rsa_key_file)
+            with open(private_key_path, 'rb') as priv_key_file:
+                private_key = RSA.import_key(priv_key_file.read())
+                if private_key.has_private():  # Double check it's a private key
+                    print(f"Found private key: {private_key_path}")
+                else:
+                    print(f"Error: {private_key_path} is not a private key!")
+
+    # Check if both public and private keys are found
+    if not private_key or not public_key:
+        return jsonify({"error": "Matching RSA key files not found."}), 400
+
+    os.remove(private_key_path)
+    os.remove(public_key_path)
+
+    # Step 5: Decrypt the AES key using the private RSA key
+    try:
+        aes_key = rsa_decrypt(rsa_encrypted_aes_key, private_key)
+    except Exception as e:
+        return jsonify({"error": f"Failed to decrypt AES key: {str(e)}"}), 500
+
+    # Step 6: Decrypt the PGN file using the decrypted AES key
+    encrypted_pgn_data = pgn_file.read()  # Read as binary since it's encrypted
+    try:
+        decrypted_pgn_string = aes_decrypt(encrypted_pgn_data, aes_key).decode('utf-8')  # Ensure utf-8 decoding
+    except Exception as e:
+        return jsonify({"error": f"Failed to decrypt the PGN file: {str(e)}"}), 500
 
     # Step 7: Save the decrypted data to the specified output file
     output_file_path = f'uploads/{output_file_name}'
-    decode(decrypted_pgn_string, output_file_path)  # Call your decode function
+    undo_gambit(decrypted_pgn_string, output_file_path)  # Assuming decode() converts PGN back to original format
 
     return jsonify({"message": "File decrypted successfully!", "output_file": output_file_name})
-
 
 @app.route('/delete_account', methods=['GET', 'POST'])
 def delete_account():
