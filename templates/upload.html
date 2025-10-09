@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Queen's Gambit (v11) - Upload</title>
+    <title>Queen's Gambit (v13) - Upload</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
@@ -42,6 +42,12 @@
             width: 150px; /* Adjust the width as needed */
             display: inline-block; /* Ensures it stays in line */
         }
+        /* File name display style */
+        .file-name {
+            margin-top: 0px;
+            font-style: italic;
+            color: #ffffff;
+        }
     </style>
 </head>
 <body>
@@ -60,6 +66,7 @@
             <form id="upload-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
                 <label for="file" class="upload-button">Choose a file</label>
                 <input type="file" id="file" name="file" required style="display: none;">
+                <div id="file-name-upload" class="file-name"></div> <!-- Display selected file name here -->
                 <input type="submit" value="Encrypt">
             </form>
             <div id="loading">
@@ -73,11 +80,7 @@
             <form id="decrypt-form" action="{{ url_for('decrypt_file') }}" method="post" enctype="multipart/form-data">
                 <label for="pgn_file" class="upload-button">Choose a .pgn file</label>
                 <input type="file" id="pgn_file" name="pgn_file" required style="display: none;">
-                
-                <div>
-                    <label for="output_file" class="output-label">Output file name:</label>
-                    <input type="text" id="output_file" name="output_file" placeholder="output.txt" required style="width: 150px; display: inline-block; margin-left: 10px;">
-                </div>                        
+                <div id="file-name-decrypt" class="file-name"></div> <!-- Display selected .pgn file name here -->             
                 
                 <input type="submit" value="Decrypt">
             </form>
@@ -91,6 +94,19 @@
 
     <script>
         $(document).ready(function() {
+            // Show selected file name for upload form
+            $('#file').on('change', function() {
+                var fileName = $(this).val().split('\\').pop();
+                $('#file-name-upload').text('Selected file: ' + fileName);
+            });
+
+            // Show selected file name for decrypt form
+            $('#pgn_file').on('change', function() {
+                var fileName = $(this).val().split('\\').pop();
+                $('#file-name-decrypt').text('Selected file: ' + fileName);
+            });
+
+            // Handle form submission for upload form
             $('#upload-form').on('submit', function(e) {
                 e.preventDefault();
                 $('#loading').show();
@@ -113,7 +129,7 @@
                     },
                     success: function(response) {
                         var pgnFileName = response.pgn_file;
-                        var message = response.message + ' <a href="/uploads/' + pgnFileName + '" download>Download PGN</a>';
+                        var message = '<strong>' + response.message + '</strong> <a href="/uploads/' + pgnFileName + '" download><strong>Download PGN</strong></a>';
                         $('#result').html(message);
                         $('#loading').hide();
                     },
@@ -124,6 +140,7 @@
                 });
             });
 
+            // Handle form submission for decrypt form
             $('#decrypt-form').on('submit', function(e) {
                 e.preventDefault();
                 $('#loading-decrypt').show();
@@ -146,7 +163,7 @@
                     },
                     success: function(response) {
                         var outputFileName = response.output_file;
-                        var message = response.message + ' <a href="/uploads/' + outputFileName + '" download>Download Decrypted File</a>';
+                        var message = '<strong>' + response.message + '</strong> <a href="/uploads/' + outputFileName + '" download><strong>Download Decrypted File</strong></a>';
                         $('#result-decrypt').html(message);
                         $('#loading-decrypt').hide();
                     },

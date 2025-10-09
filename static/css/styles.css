@@ -73,7 +73,7 @@ label {
     color: #ffffff;
 }
 
-input[type="text"], input[type="password"] {
+input[type="text"], input[type="password"],  input[type="email"]{
     padding: 0.5rem;
     border: 1px solid #00bfff;
     border-radius: 4px;
@@ -203,4 +203,84 @@ a {
 
 a:hover {
     text-decoration: underline;
+}
+
+/* Table Container */
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 1em;
+    font-family: Arial, sans-serif;
+    background-color: #ff00d000; /* Light background color for contrast */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Table Header */
+.user-table th {
+    background-color: #00bfff; /* Blue header */
+    color: #ffffff; /* White text */
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: bold;
+    border-bottom: 2px solid #dddddd;
+}
+
+/* Table Rows */
+.user-table td {
+    padding: 12px 15px;
+    color: #ffffff; /* Dark text */
+}
+
+/* Alternate Row Background */
+.user-table tbody tr:nth-child(even) {
+    background-color: #f9fcff00; /* Light blue-gray for alternate rows */
+}
+
+/* Row Hover Effect */
+.user-table tbody tr:hover {
+    background-color: #4e5051; /* Slightly darker shade on hover */
+}
+
+/* Button Styling */
+.button.delete {
+    padding: 8px 12px;
+    font-size: 0.9em;
+    border-radius: 4px;
+    background-color: #00bfff; /* Blue background */
+    color: #000000; /* Black text */
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+/* Button Hover Effect */
+.button.delete:hover {
+    background-color: #008fcc; /* Darker blue on hover */
+}
+
+/* Centering the Table Container */
+.table-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0; /* Adjust spacing as needed */
+}
+
+/* Styling the table with rounded corners */
+.user-table {
+    width: 100%;
+    max-width: 800px;
+    border-collapse: collapse; /* Remove double borders between cells */
+    border-radius: 15px; /* Rounded corners */
+    overflow: hidden; /* Ensures the corners apply to content inside the table */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Optional: Adds a shadow for depth */
+}
+
+/* Centering and styling the heading */
+.table-heading {
+    text-align: center;
+    font-size: 1.8em;
+    color: #ff9100; /* Blue color */
+    margin-bottom: 20px; /* Space between heading and table */
 }
