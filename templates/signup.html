@@ -25,8 +25,13 @@
         <form method="POST">
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required>
+
             <label for="password">Password:</label>
             <input type="password" id="password" name="password" required>
+
+            <label for="email">Email:</label> <!-- New email input -->
+            <input type="email" id="email" name="email" required>
+
             <input type="submit" value="Sign Up">
         </form>
         <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>

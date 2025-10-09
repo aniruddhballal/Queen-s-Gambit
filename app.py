@@ -1,11 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session
-import os, base64, json, time
+import os, base64, json, time, smtplib, random
 from flask import jsonify
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from checkmate import make_gambit
 from unmate import undo_gambit
 from pgn_aes192_rsa4096 import aes_encrypt, aes_decrypt, rsa_encrypt, rsa_decrypt  # Import from the new module
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Generates a random 24-byte key
@@ -19,38 +20,142 @@ def load_users():
         return {}
 
 # Save users to JSON file
-def save_users():
+def save_users(users_db):
     with open('users.json', 'w') as f:
         json.dump(users_db, f)
 
 users_db = load_users()
 
-@app.route('/', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if username in users_db and users_db[username] == password:
-            return redirect(url_for('upload_file'))
-        else:
-            flash('Incorrect username or password, please try again.')
-            return redirect(url_for('login'))
-    return render_template('login.html')
+# Function to send OTP email
+def send_otp_email(recipient_email):
+    otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
+    subject = "Your OTP Code"
+    body = f"Your OTP code is: {otp}"
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = "aniruddhballaldeeksha@gmail.com"
+    msg["To"] = recipient_email
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login("aniruddhballaldeeksha@gmail.com", "albe mlvu hgvs csis")
+            server.sendmail("aniruddhballaldeeksha@gmail.com", recipient_email, msg.as_string())
+        return otp
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return None
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        email = request.form['email']
+
+        # Check if username already exists
         if username in users_db:
-            flash('Username already exists. Please choose a different one.')
+            flash('Username already taken. Please choose another.')
             return redirect(url_for('signup'))
+
+        # Send OTP and store user data temporarily in session
+        otp = send_otp_email(email)
+        if otp is not None:
+            session['otp'] = otp
+            session['temp_user'] = {'username': username, 'password': password, 'email': email}
+            return redirect(url_for('verify_signup_otp'))
         else:
-            users_db[username] = password
-            save_users()  # Save the updated users_db
-            flash('Account created successfully! Please log in.')
-            return redirect(url_for('login'))
+            flash('Failed to send OTP. Please try again.')
+            return redirect(url_for('signup'))
+
     return render_template('signup.html')
+
+@app.route('/verify_signup_otp', methods=['GET', 'POST'])
+def verify_signup_otp():
+    if request.method == 'POST':
+        entered_otp = request.form['otp']
+        
+        # Retrieve and remove OTP from session immediately after reading
+        stored_otp = session.pop('otp', None)
+        
+        if stored_otp is not None and int(entered_otp) == stored_otp:
+            # OTP is correct, save the user in the database
+            temp_user = session.pop('temp_user', None)
+            if temp_user:
+                users_db[temp_user['username']] = {
+                    'password': temp_user['password'],
+                    'email': temp_user['email']
+                }
+                save_users(users_db)
+                flash('Signup successful! Please log in.')
+                return redirect(url_for('login'))
+            else:
+                flash('Session expired. Please try signing up again.')
+                return redirect(url_for('signup'))
+        else:
+            flash('Invalid OTP. Please try again.')
+            return redirect(url_for('signup'))
+
+    return render_template('verify_otp.html')
+
+@app.route('/verify_otp', methods=['POST'])
+def verify_otp():
+    print("inside verify_otp")
+    if request.method == 'POST':
+        entered_otp = request.form['otp']
+        print(f"entered_otp: {entered_otp}")
+        print(f"session['otp']: {session.get('otp')}")
+
+        # Retrieve and remove OTP from session immediately after reading
+        stored_otp = session.pop('otp', None)
+
+        # Check if OTP exists and if it matches the entered OTP
+        if stored_otp is not None and int(entered_otp) == stored_otp:
+            return redirect(url_for('upload_file'))  # Redirect to upload page
+        else:
+            flash('Invalid or expired OTP. Please try again.')
+            return redirect(url_for('login'))  # Redirect back to login
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    print("inside login")
+    if request.method == 'POST':
+        # Check if OTP was submitted
+        if 'otp' in session:
+            entered_otp = request.form.get('otp')
+            if entered_otp == session['otp']:
+                # OTP is correct, log in the user
+                username = session['username']
+                session.pop('otp', None)  # Clear the OTP from the session
+                return redirect(url_for('upload_file'))  # Redirect to the upload page
+            else:
+                flash('Invalid OTP. Please try again.')
+                return redirect(url_for('login'))
+
+        # Regular login process
+        username = request.form['username']
+        password = request.form['password']
+
+        # Check if the user exists and the password is correct
+        if username in users_db and users_db[username]['password'] == password:
+            # Send OTP to the user's Gmail
+            recipient_email = users_db[username]['email']  # Get the user's email from the database
+            otp = send_otp_email(recipient_email)
+            print(f"recipient_email: {recipient_email}")
+            print(f"otp: {otp}")
+            if otp is not None:
+                session['otp'] = otp  # Store the OTP in the session
+                session['username'] = username  # Store username in session
+                # Render the same login page but with an OTP field
+                return render_template('login.html', otp_required=True)
+            else:
+                flash('Failed to send OTP. Please try again.')
+                return redirect(url_for('login'))
+        else:
+            flash('Incorrect username or password, please try again.')
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
 
 # Helper function to XOR two hex strings and return the result
 def xor_hex_strings(hex1, hex2):
