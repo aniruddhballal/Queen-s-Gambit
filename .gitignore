@@ -1,4 +1,14 @@
+.env
+*.pyc
+__pycache__/
+uploads/
+keys/
+rsa_keys/
+*.pem
+*.pgn
+.DS_Store
 users.json
 database.db
 Queen's Gambit Final Synopsis (turnitin).pdf
 Queen's Gambit - Final Synopsis.pdf
+howtorun.md
