@@ -122,25 +122,37 @@ Download Encrypted PGN → Key Retrieval → RSA Decryption → AES Decryption �
 - pip package manager
 
 ### Dependencies
-
 ```bash
-pip install flask pycryptodome python-chess
+pip install -r requirements.txt
 ```
 
 ### Setup
 
 1. Clone or download the application
-2. Install dependencies
-3. Create required directories (auto-created on first run):
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Create a `.env` file in the root directory with the following configuration:
+   ```env
+   SECRET_KEY=your-secret-key-here
+   ADMIN_USERNAME=admin123
+   ADMIN_PASSWORD=your-secure-admin-password
+   
+   SMTP_SERVER=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_EMAIL=your-email@gmail.com
+   SMTP_PASSWORD=your-app-specific-password
+   ```
+   
+   **Important:** For Gmail, generate an [App Password](https://support.google.com/accounts/answer/185833) instead of using your regular password.
+
+4. Required directories (auto-created on first run):
    - `uploads/`
    - `keys/`
    - `rsa_keys/`
-4. Configure email settings in the code:
-   ```python
-   # Update these in send_otp_email() function
-   SMTP_EMAIL = "your_email@gmail.com"
-   SMTP_PASSWORD = "your_app_password"
-   ```
 
 ### Running the Application
 
@@ -283,9 +295,19 @@ Critical for correct decoding:
 ## File Structure
 
 ```
-project/
-├── app.py                 # Main application file
-├── users.json            # User database (auto-generated)
+├── app.py                  # Main application entry point
+├── config.py              # Configuration management
+├── database.py            # User database operations
+├── email_service.py       # Email and OTP functionality
+├── crypto_utils.py        # Encryption/decryption utilities
+├── chess_encoder.py       # Chess-based file encoding
+├── file_manager.py        # File and key management
+├── auth.py                # Authentication decorators and utilities
+├── routes/
+│   ├── auth_routes.py     # Authentication routes
+│   ├── admin_routes.py    # Admin panel routes
+│   └── file_routes.py     # File upload/decrypt routes
+├── templates/             # HTML templates
 ├── templates/            # HTML templates
 │   ├── login.html
 │   ├── signup.html
@@ -296,6 +318,13 @@ project/
 ├── uploads/              # Temporary file storage
 ├── keys/                 # Encrypted AES keys
 └── rsa_keys/            # RSA key pairs
+
+
+├── static/                # Static files (CSS, JS)
+├── .env                   # Environment variables (not in git)
+├── .gitignore            # Git ignore rules
+├── requirements.txt       # Python dependencies
+└── README.md             # This file
 ```
 
 ## Important Notes
