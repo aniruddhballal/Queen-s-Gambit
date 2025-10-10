@@ -318,8 +318,6 @@ Critical for correct decoding:
 ├── uploads/              # Temporary file storage
 ├── keys/                 # Encrypted AES keys
 └── rsa_keys/            # RSA key pairs
-
-
 ├── static/                # Static files (CSS, JS)
 ├── .env                   # Environment variables (not in git)
 ├── .gitignore            # Git ignore rules
@@ -332,7 +330,6 @@ Critical for correct decoding:
 ### Security Considerations (Production)
 - **Password Hashing**: Currently stores plaintext passwords - implement bcrypt/argon2
 - **HTTPS**: Use SSL/TLS in production
-- **Email Security**: Use environment variables for SMTP credentials
 - **Rate Limiting**: Add protection against brute force attacks
 - **Input Validation**: Strengthen file upload validation
 - **Session Security**: Configure secure session cookies
