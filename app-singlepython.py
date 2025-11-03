@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 
 app = Flask(__name__)
 
+# Add this global variable after the app initialization
+progress_data = {}  # Dictionary to store progress for each session
+
 # load .env into os.environ (call once at app start)
 load_dotenv()
 
@@ -130,89 +133,90 @@ def random_metadata():
 
     return metadata
 
-def make_gambit(sample_file: str):
+def make_gambit(sample_file: str, session_id: str = None):
     print("Making the Gambit...")
-    bittify = (255).bit_length()  # Determine the number of bits required to represent the maximum byte value (255)
+    bittify = (255).bit_length()
 
-    with open(sample_file, "rb") as f:  # Open the file in binary read mode
-        file01 = list(f.read())  # Read the file contents and convert it into a list of bytes
+    with open(sample_file, "rb") as f:
+        file01 = list(f.read())
 
-    bits = bittify * len(file01)  # Calculate the total number of bits from the number of bytes in the file
-    pgnlist = []  # Initialize an empty list to store PGN (Portable Game Notation) outputs
-    current_pos = 0  # Initialize a bit index to track the current position in the file bits
-    board_instance = Board()  # Create a new chess board instance to simulate the game
+    bits = bittify * len(file01)  # Total bits to process
+    pgnlist = []
+    current_pos = 0
+    board_instance = Board()
 
-    while True:  # Start an infinite loop for generating moves until a termination condition is met
-        gen_moves = board_instance.generate_legal_moves()  # Generate legal moves for the current position on the chess board
-
+    while True:
+        # Update progress
+        if session_id:
+            progress_percentage = min(100, (current_pos / bits) * 100)
+            progress_data[session_id] = {
+                'current': current_pos,
+                'total': bits,
+                'percentage': round(progress_percentage, 2),
+                'stage': 'encoding'
+            }
+        
+        gen_moves = board_instance.generate_legal_moves()
         moves_list = list(board_instance.generate_legal_moves())
-
-        # Calculate the log2 length separately and convert it to an integer.
         log_length = int(log2(len(moves_list)))
-
-        # Calculate the number of bits remaining.
         remaining_bits = bits - current_pos
-
-        # Take the minimum of the two calculated values.
-        # ensure bits_req is not larger than either the required bits to represent the indices or the bits left to read. This prevents indexing errors or reading past the end of available bits.
         bits_req = min(log_length, remaining_bits)
 
-        bits_map_set_of_moves = {}  # Initialize a dictionary to map move UCI (Universal Chess Interface) strings to their binary representation
-        
-        # Create a dictionary of valid moves, mapping UCI strings to their corresponding binary strings
+        bits_map_set_of_moves = {}
         valid_moves = {
             anti_illegal_move.uci(): no_to_bin_str(i, bits_req)
             for i, anti_illegal_move in enumerate(gen_moves)
             if len(no_to_bin_str(i, bits_req)) <= bits_req
         }
 
-        bits_map_set_of_moves.update(valid_moves)  # Update the move_bits dictionary with valid moves
-        
-        next_byte_i = current_pos // bittify  # Calculate the index of the closest byte in the file that corresponds to the current bit index
-        strs = ''  # Initialize a string to accumulate binary strings from the file bytes
+        bits_map_set_of_moves.update(valid_moves)
+        next_byte_i = current_pos // bittify
+        strs = ''
 
-        # Extract up to two bytes from the file and convert them to binary strings
         for byte1 in file01[next_byte_i:next_byte_i + 2]:
-            binary_string = no_to_bin_str(byte1, bittify)  # Convert the byte to a binary string
-            strs += binary_string  # Accumulate the binary string
+            binary_string = no_to_bin_str(byte1, bittify)
+            strs += binary_string
 
-        start_index = current_pos % bittify  # Calculate the starting index for extracting bits from the file chunk pool
-        next_str = ''  # Initialize a string to store the next chunk of bits to be compared with legal move binaries
+        start_index = current_pos % bittify
+        next_str = ''
 
-        # Extract the relevant bits from the file chunk pool based on the maximum binary length
         for i in range(bits_req):
-            if start_index + i < len(strs):  # Ensure we don't go out of bounds
-                next_str += strs[start_index + i]  # Append the bit to the next chunk
+            if start_index + i < len(strs):
+                next_str += strs[start_index + i]
 
-        current_pos += bits_req  # Increment the file bit index by the maximum binary length of the legal moves
+        current_pos += bits_req
 
-        # Iterate over the valid moves to find a match with the extracted file bits
         for movei in bits_map_set_of_moves:
-            bits_mapped = bits_map_set_of_moves[movei]  # Get the binary representation of the move
-            if bits_mapped == next_str:  # Check if it matches the next file chunk
-                board_instance.push_uci(movei)  # Push the move onto the chess board
-                break  # Exit the loop once a move is found
+            bits_mapped = bits_map_set_of_moves[movei]
+            if bits_mapped == next_str:
+                board_instance.push_uci(movei)
+                break
         
-        # Define a list of conditions that can terminate the loop and trigger PGN generation
-        if (board_instance.legal_moves.count() <= 1.5
-           or current_pos >= bits
-        ):  # If any of the conditions are true, generate the PGN output
-            pgn_ = pgn.Game()  # Create a new PGN game object
-            metadata = random_metadata()  # Generate random metadata for the game
+        if (board_instance.legal_moves.count() <= 1.5 or current_pos >= bits):
+            pgn_ = pgn.Game()
+            metadata = random_metadata()
 
-            # Add metadata headers to the PGN game
             for key, value in metadata.items():
                pgn_.headers[key] = value
             
-            pgn_.add_line(board_instance.move_stack)  # Add the move stack from the chess board to the PGN
-            pgnlist.append(str(pgn_))  # Convert the PGN game to a string and append it to the output list
-            board_instance.reset()  # Reset the chess board for the next game simulation
+            pgn_.add_line(board_instance.move_stack)
+            pgnlist.append(str(pgn_))
+            board_instance.reset()
 
-        if current_pos >= bits:  # Break the loop if the end of the file has been reached
+        if current_pos >= bits:
             break
 
+    # Set progress to 100% when done
+    if session_id:
+        progress_data[session_id] = {
+            'current': bits,
+            'total': bits,
+            'percentage': 100.0,
+            'stage': 'encoding'
+        }
+    
     print("Gambit done.")
-    return "\n\n".join(pgnlist)  # Return all collected PGN strings joined by two newline characters
+    return "\n\n".join(pgnlist)
 
 def listify_pgns(pgn_string: str):  
     # Initialize an empty list to store parsed pgn.Game objects
@@ -232,103 +236,97 @@ def listify_pgns(pgn_string: str):
     # Return the list of all parsed games
     return games
 
-def undo_gambit(games_pgn: str, output_og_sample_file: str):
+def undo_gambit(games_pgn: str, output_og_sample_file: str, session_id: str = None):
     print("Undoing the Gambit...")
-    moves_processed = 0  # Initialize a counter to keep track of the total number of moves processed
-    bittify = (255).bit_length()  # Set the bit length for 1 byte, which is 8 (since 255 is 11111111 in binary)
+    moves_processed = 0
+    bittify = (255).bit_length()
     
-    # Load games from PGN string
-    # Convert the PGN string into a list of chess games (using a helper function)
     pgn_list = listify_pgns(games_pgn)
+    iterable_games = list(pgn_list)
+    total_games = len(iterable_games)
 
-    # Ensure that the result is in a list form
-    iterable_games = list(pgn_list)  # Convert the iterable of games into a list to iterate over later
-
-    # Prepare to write to the output file in binary mode
     op_dec_file = open(output_og_sample_file, "wb")
     try:
-        dec_data = ""  # Initialize a string to store the binary representation of moves
-        # Loop through each game in the PGN list
+        dec_data = ""
         for pgn_g_num, g in enumerate(iterable_games):
-            board_instance = Board()  # Initialize a new chess board for each game
-            moves_list = list(g.mainline_moves())  # Get the main line of moves for the current game as a list
-            moves_processed += len(moves_list)  # Update the total move count
+            # Update progress
+            if session_id:
+                progress_percentage = ((pgn_g_num + 1) / total_games) * 100
+                progress_data[session_id] = {
+                    'current': pgn_g_num + 1,
+                    'total': total_games,
+                    'percentage': round(progress_percentage, 2),
+                    'stage': 'decoding'
+                }
+            
+            board_instance = Board()
+            moves_list = list(g.mainline_moves())
+            moves_processed += len(moves_list)
 
-            # Loop through each move in the game
             for move_i, iterable_moves in enumerate(moves_list):
-                # Get UCIs (Universal Chess Interface) of legal moves in the current position
-                moves_possible = board_instance.generate_legal_moves()  # Get a generator of all legal moves
-                strs = [move_iterable.uci() for move_iterable in moves_possible]  # Convert legal moves into UCI string format
+                moves_possible = board_instance.generate_legal_moves()
+                strs = [move_iterable.uci() for move_iterable in moves_possible]
 
-                # Get binary representation of the move played
-                indexify_move = strs.index(iterable_moves.uci())  # Find the index of the move in the list of legal moves
+                indexify_move = strs.index(iterable_moves.uci())
+                pad_indexed_bin = bin(indexify_move)[2:]
 
-                # Convert the index to a binary string and remove the '0b' prefix
-                pad_indexed_bin = bin(indexify_move)[2:]  # Convert index to a binary string without the '0b' prefix
-
-                # Determine maximum binary length for the current move
-                # Check if we are at the last game and last move
-                game_over = (pgn_g_num == len(iterable_games) - 1)  # Check if this is the last game
-                last_move = (move_i == len(moves_list) - 1)  # Check if this is the last move in the game
+                game_over = (pgn_g_num == len(iterable_games) - 1)
+                last_move = (move_i == len(moves_list) - 1)
 
                 if game_over and last_move:
-                    # If last game and move, calculate max binary length but adjust for file byte size
-                    moves_count = len(strs)  # Get the number of legal moves
+                    moves_count = len(strs)
                     log_length = int(log2(moves_count))
                     remaining_bits = bittify - (len(dec_data) % bittify)
-                    bits_req = min(log_length, remaining_bits)  # refer to checkmate-make_gambit to understand whats happening here
-
+                    bits_req = min(log_length, remaining_bits)
                 else:
-                    # For all other moves, calculate max binary length normally
-                    moves_count = len(strs)  # Get the number of legal moves
-                    bits_req = int(log2(moves_count))  # Calculate max binary length based on legal moves
+                    moves_count = len(strs)
+                    bits_req = int(log2(moves_count))
 
-                # Pad the binary string of the move to ensure correct length
-                test_pad = bits_req - len(pad_indexed_bin)  # Calculate required padding
-                non_neg_padding = max(0, test_pad)  # Ensure padding is non-negative
-                padding = "0" * non_neg_padding  # Create a padding string of zeros
-                pad_indexed_bin = padding + pad_indexed_bin  # Prepend the padding to the binary string
+                test_pad = bits_req - len(pad_indexed_bin)
+                non_neg_padding = max(0, test_pad)
+                padding = "0" * non_neg_padding
+                pad_indexed_bin = padding + pad_indexed_bin
 
-                # Play the move on the chess board
-                next_move = iterable_moves.uci()  # Get the UCI representation of the move
-                board_instance.push_uci(next_move)  # Push the move to update the chess board
+                next_move = iterable_moves.uci()
+                board_instance.push_uci(next_move)
 
-                # Add the move's binary representation to the output data string
-                dec_data += pad_indexed_bin  # Append the binary string of the move to output data
+                dec_data += pad_indexed_bin
 
-                # Check if the output_data length is a multiple of 8 bits (a full byte)
                 if len(dec_data) % bittify == 0:
-                    byte_values = []  # Initialize a list to store byte values
+                    byte_values = []
+                    num_chunks = len(dec_data) / bittify
+                    i = 0
 
-                    # Loop through the output_data in 8-bit chunks
-                    num_chunks = len(dec_data) / bittify  # Calculate number of 8-bit chunks in output data
-                    i = 0  # Initialize the chunk index counter
-
-                    # Process each chunk of 8 bits
                     while i < int(num_chunks):
-                        start_index = i * bittify  # Calculate the start index for the chunk
-                        end_index = start_index + bittify  # Calculate the end index for the chunk
+                        start_index = i * bittify
+                        end_index = start_index + bittify
 
-                        chunk = ''  # Initialize an empty string for the chunk
+                        chunk = ''
                         for indexify_move in range(start_index, end_index):
-                            chunk += dec_data[indexify_move]  # Append each bit from the chunk to the chunk string
+                            chunk += dec_data[indexify_move]
 
-                        # Convert the 8-bit chunk into an integer
-                        byte_value = 0  # Initialize the byte value
+                        byte_value = 0
                         for bit in chunk:
-                            byte_value = byte_value * 2 + int(bit)  # Shift bits left and add the current bit
+                            byte_value = byte_value * 2 + int(bit)
 
-                        byte_values.append(byte_value)  # Append the byte value to the list
-                        i += 1  # Increment the chunk index counter
+                        byte_values.append(byte_value)
+                        i += 1
 
-                    # Write the byte values to the output file
                     for byte_value in byte_values:
-                        byte = byte_value.to_bytes(1, byteorder='big')  # Convert each byte value to a byte
-                        op_dec_file.write(byte)  # Write the byte to the output file
+                        byte = byte_value.to_bytes(1, byteorder='big')
+                        op_dec_file.write(byte)
 
-                    dec_data = ""  # Reset the output_data string for the next iteration
+                    dec_data = ""
     finally:
         op_dec_file.close()
+        # Set progress to 100% when done
+        if session_id:
+            progress_data[session_id] = {
+                'current': total_games,
+                'total': total_games,
+                'percentage': 100.0,
+                'stage': 'decoding'
+            }
     print("Gambit undone.")
 
 # Function to encrypt data with AES-256
@@ -495,7 +493,6 @@ def xor_hex_strings(hex1, hex2):
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
-    global progress  # Ensure we're using the global progress variable
 
     if request.method == 'POST':
         # START TIMING - User clicked encrypt button
@@ -515,9 +512,13 @@ def upload_file():
             file_save_end = time.time()
             print(f"⏱️  File save time: {file_save_end - file_save_start:.2f} seconds")
 
+            # Generate unique session ID for progress tracking
+            session_id = f"enc_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+            progress_data[session_id] = {'percentage': 0, 'stage': 'encoding'}
+
             # Call the encode function to get PGN (assumed to be a string)
             gambit_start = time.time()
-            encoded_pgn = make_gambit(uploaded_file_path)
+            encoded_pgn = make_gambit(uploaded_file_path, session_id)
             gambit_end = time.time()
             print(f"⏱️  make_gambit() time: {gambit_end - gambit_start:.2f} seconds")
 
@@ -605,7 +606,8 @@ def upload_file():
             return jsonify({
                 "message": "File converted successfully!", 
                 "pgn_file": pgn_file_name,
-                "encryption_time": f"{total_encryption_time:.2f} seconds"
+                "encryption_time": f"{total_encryption_time:.2f} seconds",
+                "session_id": session_id
             })
 
     return render_template('upload.html')
@@ -621,6 +623,10 @@ def decrypt_file():
     print(f"\n{'='*50}")
     print(f"DECRYPTION STARTED at {time.strftime('%H:%M:%S')}")
     print(f"{'='*50}")
+
+    # Generate unique session ID for progress tracking
+    session_id = f"dec_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+    progress_data[session_id] = {'percentage': 0, 'stage': 'decoding'}
     
     # Step 1: Retrieve the uploaded PGN file and the output file name
     pgn_file = request.files['pgn_file']
@@ -711,7 +717,7 @@ def decrypt_file():
     output_file_path = f'uploads/{output_file_name}'
     
     undo_gambit_start = time.time()
-    undo_gambit(decrypted_pgn_string, output_file_path)
+    undo_gambit(decrypted_pgn_string, output_file_path, session_id)
     undo_gambit_end = time.time()
     print(f"⏱️  undo_gambit() time: {undo_gambit_end - undo_gambit_start:.2f} seconds")
 
@@ -728,7 +734,8 @@ def decrypt_file():
     return jsonify({
         "message": "File decrypted successfully!", 
         "output_file": output_file_name,
-        "decryption_time": f"{total_decryption_time:.2f} seconds"
+        "decryption_time": f"{total_decryption_time:.2f} seconds",
+        "session_id": session_id
     })
 
 # ```
@@ -793,6 +800,13 @@ def delete_user(username):
 def logout():
     session.clear()  # Clear the session data
     return redirect(url_for('login'))  # Redirect to the login page
+
+@app.route('/progress/<session_id>')
+def get_progress(session_id):
+    """Endpoint to get the current progress"""
+    if session_id in progress_data:
+        return jsonify(progress_data[session_id])
+    return jsonify({'percentage': 0, 'stage': 'waiting'})
 
 if __name__ == '__main__':
     os.makedirs('uploads', exist_ok=True)  # Ensure the uploads directory exists
