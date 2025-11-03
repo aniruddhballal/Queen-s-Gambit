@@ -141,13 +141,25 @@
                         success: function(data) {
                             var percentage = data.percentage || 0;
                             var stage = data.stage || 'processing';
+                            var status = data.status || 'processing';
                             
                             $('#progress-bar').css('width', percentage + '%');
                             $('#progress-bar').text(Math.round(percentage) + '%');
                             $('#progress-text').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%');
                             
-                            if (percentage >= 100) {
+                            // Check if completed
+                            if (status === 'completed' && percentage >= 100) {
                                 clearInterval(encryptProgressInterval);
+                                
+                                var message = '<strong>' + data.message + '</strong><br>' +
+                                            '<strong>Time: ' + data.encryption_time + '</strong><br>' +
+                                            '<a href="/uploads/' + data.pgn_file + '" download><strong>Download PGN</strong></a>';
+                                $('#result').html(message);
+                                $('#loading').hide();
+                            } else if (status === 'error') {
+                                clearInterval(encryptProgressInterval);
+                                $('#result').html('<strong style="color: red;">Error: ' + data.error + '</strong>');
+                                $('#loading').hide();
                             }
                         },
                         error: function() {
@@ -166,13 +178,25 @@
                         success: function(data) {
                             var percentage = data.percentage || 0;
                             var stage = data.stage || 'processing';
+                            var status = data.status || 'processing';
                             
                             $('#progress-bar-decrypt').css('width', percentage + '%');
                             $('#progress-bar-decrypt').text(Math.round(percentage) + '%');
                             $('#progress-text-decrypt').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%');
                             
-                            if (percentage >= 100) {
+                            // Check if completed
+                            if (status === 'completed' && percentage >= 100) {
                                 clearInterval(decryptProgressInterval);
+                                
+                                var message = '<strong>' + data.message + '</strong><br>' +
+                                            '<strong>Time: ' + data.decryption_time + '</strong><br>' +
+                                            '<a href="/uploads/' + data.output_file + '" download><strong>Download Decrypted File</strong></a>';
+                                $('#result-decrypt').html(message);
+                                $('#loading-decrypt').hide();
+                            } else if (status === 'error') {
+                                clearInterval(decryptProgressInterval);
+                                $('#result-decrypt').html('<strong style="color: red;">Error: ' + data.error + '</strong>');
+                                $('#loading-decrypt').hide();
                             }
                         },
                         error: function() {
@@ -199,25 +223,13 @@
                     processData: false,
                     contentType: false,
                     success: function(response) {
-                        // Start polling for progress if session_id is provided
+                        // Start polling immediately after getting session_id
                         if (response.session_id) {
                             pollEncryptProgress(response.session_id);
-                        }
-                        
-                        var pgnFileName = response.pgn_file;
-                        var encryptionTime = response.encryption_time || 'N/A';
-                        var message = '<strong>' + response.message + '</strong><br>' +
-                                    '<strong>Time: ' + encryptionTime + '</strong><br>' +
-                                    '<a href="/uploads/' + pgnFileName + '" download><strong>Download PGN</strong></a>';
-                        $('#result').html(message);
-                        
-                        // Stop polling after a short delay
-                        setTimeout(function() {
-                            if (encryptProgressInterval) {
-                                clearInterval(encryptProgressInterval);
-                            }
+                        } else {
+                            $('#result').html('<strong style="color: red;">No session ID received</strong>');
                             $('#loading').hide();
-                        }, 1000);
+                        }
                     },
                     error: function(xhr) {
                         var errorMsg = 'An error occurred. Please try again.';
@@ -226,9 +238,6 @@
                         }
                         $('#result').html('<strong style="color: red;">' + errorMsg + '</strong>');
                         $('#loading').hide();
-                        if (encryptProgressInterval) {
-                            clearInterval(encryptProgressInterval);
-                        }
                     }
                 });
             });
@@ -250,25 +259,13 @@
                     processData: false,
                     contentType: false,
                     success: function(response) {
-                        // Start polling for progress if session_id is provided
+                        // Start polling immediately after getting session_id
                         if (response.session_id) {
                             pollDecryptProgress(response.session_id);
-                        }
-                        
-                        var outputFileName = response.output_file;
-                        var decryptionTime = response.decryption_time || 'N/A';
-                        var message = '<strong>' + response.message + '</strong><br>' +
-                                    '<strong>Time: ' + decryptionTime + '</strong><br>' +
-                                    '<a href="/uploads/' + outputFileName + '" download><strong>Download Decrypted File</strong></a>';
-                        $('#result-decrypt').html(message);
-                        
-                        // Stop polling after a short delay
-                        setTimeout(function() {
-                            if (decryptProgressInterval) {
-                                clearInterval(decryptProgressInterval);
-                            }
+                        } else {
+                            $('#result-decrypt').html('<strong style="color: red;">No session ID received</strong>');
                             $('#loading-decrypt').hide();
-                        }, 1000);
+                        }
                     },
                     error: function(xhr) {
                         var errorMsg = 'An error occurred. Please try again.';
@@ -277,9 +274,6 @@
                         }
                         $('#result-decrypt').html('<strong style="color: red;">' + errorMsg + '</strong>');
                         $('#loading-decrypt').hide();
-                        if (decryptProgressInterval) {
-                            clearInterval(decryptProgressInterval);
-                        }
                     }
                 });
             });
