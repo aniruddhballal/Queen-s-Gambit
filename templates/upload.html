@@ -145,8 +145,25 @@
                             
                             $('#progress-bar').css('width', percentage + '%');
                             $('#progress-bar').text(Math.round(percentage) + '%');
-                            $('#progress-text').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%');
                             
+                            var speedText = '';
+                            if (data.speed) {
+                                if (data.speed >= 1000000) {
+                                    speedText = ' - Speed: ' + (data.speed / 1000000).toFixed(2) + ' Mbps';
+                                } else if (data.speed >= 1000) {
+                                    speedText = ' - Speed: ' + (data.speed / 1000).toFixed(2) + ' Kbps';
+                                } else {
+                                    speedText = ' - Speed: ' + data.speed.toFixed(2) + ' bps';
+                                }
+                            }
+                            
+                            var timeText = '';
+                            if (data.elapsed_time) {
+                                timeText = ' - Time: ' + data.elapsed_time.toFixed(1) + 's';
+                            }
+                            
+                            $('#progress-text').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%' + speedText + timeText);
+                                    
                             // Check if completed
                             if (status === 'completed' && percentage >= 100) {
                                 clearInterval(encryptProgressInterval);
@@ -182,7 +199,19 @@
                             
                             $('#progress-bar-decrypt').css('width', percentage + '%');
                             $('#progress-bar-decrypt').text(Math.round(percentage) + '%');
-                            $('#progress-text-decrypt').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%');
+                            
+                            var speedText = '';
+                            if (data.speed) {
+                                speedText = ' - Speed: ' + data.speed.toFixed(2) + ' games/sec';
+                            }
+                            
+                            var timeText = '';
+                            if (data.elapsed_time) {
+                                timeText = ' - Time: ' + data.elapsed_time.toFixed(1) + 's';
+                            }
+                            
+                            $('#progress-text-decrypt').text('Stage: ' + stage + ' - ' + percentage.toFixed(2) + '%' + speedText + timeText);
+
                             
                             // Check if completed
                             if (status === 'completed' && percentage >= 100) {

@@ -141,6 +141,7 @@ def make_gambit(sample_file: str, session_id: str = None):
         file01 = list(f.read())
 
     bits = bittify * len(file01)  # Total bits to process
+    start_time = time.time()  # Add this line
     pgnlist = []
     current_pos = 0
     board_instance = Board()
@@ -149,11 +150,15 @@ def make_gambit(sample_file: str, session_id: str = None):
         # Update progress
         if session_id:
             progress_percentage = min(100, (current_pos / bits) * 100)
+            elapsed_time = time.time() - start_time
+            speed = current_pos / elapsed_time if elapsed_time > 0 else 0
             progress_data[session_id] = {
                 'current': current_pos,
                 'total': bits,
                 'percentage': round(progress_percentage, 2),
-                'stage': 'encoding'
+                'stage': 'encoding',
+                'speed': round(speed, 2),
+                'elapsed_time': round(elapsed_time, 2)
             }
         
         gen_moves = board_instance.generate_legal_moves()
@@ -208,11 +213,15 @@ def make_gambit(sample_file: str, session_id: str = None):
 
     # Set progress to 100% when done
     if session_id:
+        elapsed_time = time.time() - start_time
+        avg_speed = bits / elapsed_time if elapsed_time > 0 else 0
         progress_data[session_id] = {
             'current': bits,
             'total': bits,
             'percentage': 100.0,
-            'stage': 'encoding'
+            'stage': 'encoding',
+            'speed': round(avg_speed, 2),
+            'elapsed_time': round(elapsed_time, 2)
         }
     
     print("Gambit done.")
@@ -244,6 +253,7 @@ def undo_gambit(games_pgn: str, output_og_sample_file: str, session_id: str = No
     pgn_list = listify_pgns(games_pgn)
     iterable_games = list(pgn_list)
     total_games = len(iterable_games)
+    start_time = time.time()  # Add this line
 
     op_dec_file = open(output_og_sample_file, "wb")
     try:
@@ -252,13 +262,17 @@ def undo_gambit(games_pgn: str, output_og_sample_file: str, session_id: str = No
             # Update progress
             if session_id:
                 progress_percentage = ((pgn_g_num + 1) / total_games) * 100
+                elapsed_time = time.time() - start_time
+                games_per_sec = (pgn_g_num + 1) / elapsed_time if elapsed_time > 0 else 0
                 progress_data[session_id] = {
                     'current': pgn_g_num + 1,
                     'total': total_games,
                     'percentage': round(progress_percentage, 2),
-                    'stage': 'decoding'
+                    'stage': 'decoding',
+                    'speed': round(games_per_sec, 2),
+                    'elapsed_time': round(elapsed_time, 2)
                 }
-            
+
             board_instance = Board()
             moves_list = list(g.mainline_moves())
             moves_processed += len(moves_list)
@@ -321,11 +335,15 @@ def undo_gambit(games_pgn: str, output_og_sample_file: str, session_id: str = No
         op_dec_file.close()
         # Set progress to 100% when done
         if session_id:
+            elapsed_time = time.time() - start_time
+            avg_speed = total_games / elapsed_time if elapsed_time > 0 else 0
             progress_data[session_id] = {
                 'current': total_games,
                 'total': total_games,
                 'percentage': 100.0,
-                'stage': 'decoding'
+                'stage': 'decoding',
+                'speed': round(avg_speed, 2),
+                'elapsed_time': round(elapsed_time, 2)
             }
     print("Gambit undone.")
 
