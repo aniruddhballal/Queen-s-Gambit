@@ -295,35 +295,71 @@ Critical for correct decoding:
 ## File Structure
 
 ```
-├── app.py                  # Main application entry point
-├── config.py              # Configuration management
-├── database.py            # User database operations
-├── email_service.py       # Email and OTP functionality
-├── crypto_utils.py        # Encryption/decryption utilities
-├── chess_encoder.py       # Chess-based file encoding
-├── file_manager.py        # File and key management
-├── auth.py                # Authentication decorators and utilities
-├── routes/
-│   ├── auth_routes.py     # Authentication routes
-│   ├── admin_routes.py    # Admin panel routes
-│   └── file_routes.py     # File upload/decrypt routes
-├── templates/             # HTML templates
-├── templates/            # HTML templates
+├── app.py                  # Main Flask application with routes
+├── crypto_utils.py         # Encryption/decryption utilities (AES, RSA)
+├── chess_encoder.py        # Chess-based file encoding (make_gambit)
+├── chess_decoder.py        # Chess-based file decoding (undo_gambit)
+├── email_utils.py          # Email and OTP functionality
+├── user_management.py      # User database operations (load/save)
+├── file_processor.py       # Complete encryption/decryption workflows
+├── templates/              # HTML templates
 │   ├── login.html
 │   ├── signup.html
 │   ├── verify_otp.html
 │   ├── upload.html
 │   ├── admin_dashboard.html
 │   └── delete_account.html
-├── uploads/              # Temporary file storage
-├── keys/                 # Encrypted AES keys
-└── rsa_keys/            # RSA key pairs
-├── static/                # Static files (CSS, JS)
+├── static/                 # Static files (CSS, JS)
+├── uploads/                # Temporary file storage
+├── keys/                   # Encrypted AES keys
+├── rsa_keys/              # RSA key pairs
+├── users.json             # User database (auto-generated)
 ├── .env                   # Environment variables (not in git)
 ├── .gitignore            # Git ignore rules
 ├── requirements.txt       # Python dependencies
 └── README.md             # This file
 ```
+
+## Module Descriptions
+
+### Core Modules
+
+**app.py**
+- Main Flask application entry point
+- All route handlers (login, signup, upload, decrypt, admin)
+- Session management
+- Progress tracking coordination
+
+**crypto_utils.py**
+- `aes_encrypt()` - AES-256 encryption with CBC mode
+- `aes_decrypt()` - AES-256 decryption
+- `rsa_encrypt()` - RSA-4096 encryption with OAEP padding
+- `rsa_decrypt()` - RSA-4096 decryption
+- `generate_rsa_keypair()` - RSA key pair generation
+- `xor_hex_strings()` - XOR operation for filename obfuscation
+
+**chess_encoder.py**
+- `make_gambit()` - Encode binary file into chess PGN notation
+- `no_to_bin_str()` - Number to binary string conversion
+- `random_metadata()` - Generate realistic chess game metadata
+- `random_user_id()` - Generate random player IDs
+
+**chess_decoder.py**
+- `undo_gambit()` - Decode chess PGN notation back to binary file
+- `listify_pgns()` - Parse PGN string into game objects
+
+**email_utils.py**
+- `send_otp_email()` - Generate and send OTP via SMTP
+
+**user_management.py**
+- `load_users()` - Load user database from JSON
+- `save_users()` - Save user database to JSON
+
+**file_processor.py**
+- `process_encryption()` - Complete encryption workflow (background thread)
+- `process_decryption()` - Complete decryption workflow (background thread)
+- Handles RSA key generation, AES encryption, key storage
+- Progress tracking and error handling
 
 ## Important Notes
 
